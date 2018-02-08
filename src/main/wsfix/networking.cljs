@@ -7,43 +7,13 @@
             [fulcro.websockets.transit-packer :as tp]
             [fulcro.client.primitives :as prim]))
 
-(defprotocol ChannelSocket
-  (install-push-handlers [this app] "Install the push handlers. Must be called in started callback, passed the websocket network object, and the completed app")
-  (reconnect [this] "Reconnect the socket"))
-
-(defonce router_ (atom nil))
-
-(defn stop-router! []
-  (when-let [stop-f @router_]
-    (stop-f)))
-
-(defn start-router! [ch-recv msg-handler]
-  (log/info "Starting websocket router.")
-  (stop-router!)
-  (reset! router_
-    (sente/start-chsk-router!
-      ch-recv msg-handler)))
-
-(defmulti push-received
-  "Multimethod to handle push events"
-  (fn [app msg] (:topic msg)))
-
-(defmethod push-received :default [app msg]
-  (log/error (str "Received and unhandled message: " msg)))
-
-(defn make-event-handler [{:keys [app] :as channel-socket}]
+(defn make-event-handler [push-handler]
   (fn [{:keys [id ?data] :as event}]
-    (let [reconciler (some-> app deref :reconciler)
-          app-state  (some-> reconciler (prim/app-state))]
-      (case id
-        :api/server-push (push-received @app ?data)
-        (log/debug "Unsupported message " id)))))
+    (case id
+      :api/server-push (when push-handler (push-handler ?data))
+      (log/debug "Unsupported message " id))))
 
-(defrecord ChannelClient [channel-socket url host state-callback global-error-callback transit-handlers req-params stop app]
-  ChannelSocket
-  (install-push-handlers [this fulcro-app] (reset! app fulcro-app))
-  (reconnect [this] (sente/chsk-reconnect! channel-socket))
-
+(defrecord Websockets [channel-socket push-handler url host state-callback global-error-callback transit-handlers req-params stop app]
   FulcroNetwork
   (send [this edn ok err]
     (let [{:keys [send-fn]} @channel-socket]
@@ -67,22 +37,24 @@
                                             :type           :ws ; e/o #{:auto :ajax :ws}
                                             :params         req-params
                                             :wrap-recv-evs? false})
-          message-received (make-event-handler cs)]
+          message-received (make-event-handler push-handler)]
       (cond
         (fn? state-callback) (add-watch state ::state-callback (fn [a k o n]
                                                                  (state-callback o n)))
         (instance? Atom state-callback) (add-watch state ::state-callback (fn [a k o n]
                                                                             (@state-callback o n))))
       (reset! channel-socket cs)
-      (start-router! ch-recv message-received)
+      (sente/start-chsk-router! ch-recv message-received)
       (log/debug "Remember to install the push handlers!")
       this)))
 
-(defn make-channel-client
-  "Creates a client side networking component for use in place of the default fulcro networking component.
+(defn make-websocket-networking
+  "Creates a websocket-based networking component for use as a Fulcro remote.
 
   Params:
   - `url` - The url to handle websocket traffic on. (ex. \"/chsk\")
+  - `push-handler` - A function (fn [{:keys [topic msg]}] ...) that can handle a push message.
+                     The topic is the server push verb, and the message will be the EDN sent.
   - `host` (Optional) - server that is hosting the websocket server
   - `global-error-callback` (Optional) - Analagous to the global error callback in fulcro client.
   - `req-params` (Optional) - Params to be attached to the initial request.
@@ -91,13 +63,14 @@
       `state-callback` can be either a function, or an atom containing a function.
   - `transit-handlers` (Optional) - Expects a map with `:read` and/or `:write` key containing a map of transit handlers,
   "
-  [url & {:keys [global-error-callback host req-params state-callback transit-handlers]}]
-  (map->ChannelClient {:channel-socket        (atom nil)
-                       :url                   url
-                       :host                  host
-                       :state-callback        state-callback
-                       :global-error-callback global-error-callback
-                       :transit-handlers      transit-handlers
-                       :app                   (atom nil)
-                       :stop                  (atom nil)
-                       :req-params            req-params}))
+  [url & {:keys [global-error-callback push-handler host req-params state-callback transit-handlers]}]
+  (map->Websockets {:channel-socket        (atom nil)
+                    :url                   url
+                    :push-handler          push-handler
+                    :host                  host
+                    :state-callback        state-callback
+                    :global-error-callback global-error-callback
+                    :transit-handlers      transit-handlers
+                    :app                   (atom nil)
+                    :stop                  (atom nil)
+                    :req-params            req-params}))

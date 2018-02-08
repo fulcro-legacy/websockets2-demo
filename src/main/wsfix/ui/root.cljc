@@ -26,11 +26,12 @@
 
 (def ui-status (prim/factory Status))
 
-(defsc Root [this {:keys [a ui/network-connected? status]}]
-  {:query         [:a :ui/network-connected? {:status (prim/get-query Status)}]
+(defsc Root [this {:keys [a ui/network-connected? status ui/current-time]}]
+  {:query         [:a :ui/network-connected? :ui/current-time {:status (prim/get-query Status)}]
    :initial-state {:a 1}}
   (dom/div nil
     (dom/div nil (if network-connected? "Online" "Offline"))
+    (dom/p nil (str current-time))
     (dom/button #js {:onClick (fn []
                                 (prim/transact! this `[(op/die!)]))} "Die!!!")
     (dom/button #js {:onClick (fn []

@@ -1,7 +1,7 @@
 (ns wsfix.server
   (:require
     [fulcro.easy-server :refer [make-fulcro-server]]
-    [fulcro.websockets.protocols :refer [WSListener WSNet add-listener remove-listener client-added client-dropped]]
+    [fulcro.websockets.protocols :as wp :refer [WSListener WSNet add-listener remove-listener client-added client-dropped]]
     [taoensso.sente.server-adapters.http-kit :as hk]
     [org.httpkit.server :as http-kit]
     [fulcro.websockets.components.channel-server :as cs]
@@ -23,7 +23,8 @@
     [ring.util.response :as rsp :refer [response file-response resource-response]]
     [fulcro.server :as server]
     [fulcro.easy-server :refer [index]]
-    [clojure.java.io :as io]))
+    [clojure.java.io :as io])
+  (:import (java.util Date)))
 
 (defn make-event-handler
   "Builds a sente event handler that connects the websockets support up to the parser via the
@@ -208,6 +209,24 @@
 
 (defn valid-id? [client-id] true)
 
+(defrecord Broadcaster [websockets ^Thread thread]
+  component/Lifecycle
+  (start [this]
+    (let [t (new Thread (fn []
+                          (Thread/sleep 1000)
+                          (let [cids (some-> websockets :connected-uids deref :any)]
+                            (doseq [cid cids]
+                              (wp/push websockets cid :time-change {:time (Date.)})))
+                          (recur)))]
+      (.start t)
+      (assoc this :thread t)))
+  (stop [this] (.stop thread)))
+
+(defn make-broadcaster []
+  (component/using
+    (map->Broadcaster {})
+    [:websockets]))
+
 (defn build-server
   [{:keys [config] :or {config "config/dev.edn"}}]
   (component/system-map
@@ -215,4 +234,5 @@
     :middleware (make-middleware)
     :websockets (make-websockets (server/fulcro-parser))
     :channel-listener (make-channel-listener)
+    :broadcaster (make-broadcaster)
     :web-server (make-server)))
