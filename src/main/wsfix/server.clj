@@ -25,26 +25,29 @@
     [fulcro.easy-server :refer [index]]
     [clojure.java.io :as io]))
 
-(defn make-event-handler [{:keys [send-fn listeners connected-uids parser] :as channel-server}]
+(defn make-event-handler
+  "Builds a sente event handler that connects the websockets support up to the parser via the
+  :fulcro.client/API event, and also handles notifying listeners that clients connected and dropped."
+  [{:keys [send-fn listeners parser] :as websockets}]
   (fn [event]
-    (let [env {:channel-server channel-server
-               :push           send-fn
-               :connected-uids (:all connected-uids)
-               :parser         parser
-               :sente-message  event}
-          {:keys [?reply-fn id uid client-id ?data]} event]
+    (let [env (merge {:push          send-fn
+                      :websockets    websockets
+                      :sente-message event}
+                (dissoc websockets :server-options :ring-ajax-get-or-ws-handshake :ring-ajax-post
+                  :ch-recv :send-fn :stop-fn :listeners))
+          {:keys [?reply-fn id uid ?data]} event]
       (case id
-        :chsk/uidport-open (doseq [l ^WSListener @listeners] (client-added l channel-server uid))
-        :chsk/uidport-close (doseq [l ^WSListener @listeners] (client-dropped l channel-server uid))
+        :chsk/uidport-open (doseq [l ^WSListener @listeners] (client-added l websockets uid))
+        :chsk/uidport-close (doseq [l ^WSListener @listeners] (client-dropped l websockets uid))
         :fulcro.client/API (let [result (server/handle-api-request parser env ?data)]
                              (println "Request: " ?data)
                              (println "Response: " result)
                              (if ?reply-fn
                                (?reply-fn result)
                                (println "ERROR: Reply function missing on API call!")))
-        (println "Server got unrecognized event: " id uid client-id)))))
+        (do :nothing-by-default)))))
 
-(defrecord ChannelServer [parser server-options ring-ajax-post ring-ajax-get-or-ws-handshake ch-recv send-fn connected-uids stop-fn listeners]
+(defrecord Websockets [parser server-adapter server-options ring-ajax-post ring-ajax-get-or-ws-handshake ch-recv send-fn connected-uids stop-fn listeners]
   WSNet
   (add-listener [this listener]
     (swap! listeners conj listener))
@@ -56,7 +59,7 @@
   component/Lifecycle
   (start [this]
     (println "Starting Sente Socket server")
-    (let [chsk-server (sente/make-channel-socket-server! (hk/get-sch-adapter) (merge {:packer (tp/make-packer {})} server-options))
+    (let [chsk-server (sente/make-channel-socket-server! server-adapter (merge {:packer (tp/make-packer {})} server-options))
           {:keys [ch-recv send-fn connected-uids
                   ajax-post-fn ajax-get-or-ws-handshake-fn]} chsk-server
           result      (assoc this
@@ -76,37 +79,38 @@
     (println "Stopped Sente.")
     (assoc this :stop-fn nil :ch-recv nil :send-fn nil)))
 
-(defn make-channel-server
-  "Build a channel server component with the given API parser and sente socket server options (see sente docs).
+(defn make-websockets
+  "Build a web sockets component with the given API parser and sente socket server options (see sente docs).
   NOTE: If you supply a packer, you'll need to make sure tempids are supported (this is done by default, but if you override it, it is up to you.
   The default user id mapping is to use the internally generated UUID of the client. Use sente's `:user-id-fn` option
   to override this.
-
-    (let [env {:channel-server channel-server
-               :push           send-fn
-               :connected-uids (:all connected-uids)
-               :parser         parser
-               :sente-message  event}
 
   Anything injected as a dependency of this component is added to your parser environment (in addition to the parser
   itself).
 
   Thus, if you'd like some other component (like a database) to be there, simply do this:
 
-  (component/using (make-channel-server parser {})
+  (component/using (make-websockets parser {})
     [:sql-database :sessions])
 
   and when the system starts it will inject those components into this one, and this one will be your parser env.
 
   Additionally, the parser environment will include:
-    :channel-server The channel server component
-    :push           A function that can send push messages to any connected client of this server
-    :connected-uids A set of client UIDs that are connected to this server
+    :websockets The channel server component itself
+    :push           A function that can send push messages to any connected client of this server. (just a shortcut to send-fn in websockets)
     :parser         The parser you gave this function
-    :sente-message  The raw sente event, which include the raw ring request. "
-  [parser sente-socket-server-options]
-  (map->ChannelServer {:server-options (merge {:user-id-fn (fn [r] (:client-id r))} sente-socket-server-options)
-                       :parser         parser}))
+    :sente-message  The raw sente event.
+
+  The websockets component must be joined into a real network server via a ring stack. This implementation assumes http-kit.
+
+  If you don't supply a server adapter, it defaults to http-kit.
+  "
+  ([parser]
+   (make-websockets parser nil {}))
+  ([parser http-server-adapter sente-socket-server-options]
+   (map->Websockets {:server-options (merge {:user-id-fn (fn [r] (:client-id r))} sente-socket-server-options)
+                     :server-adapter (or http-server-adapter (hk/get-sch-adapter))
+                     :parser         parser})))
 
 (defn not-found-handler []
   (fn [req]
@@ -120,7 +124,9 @@
       (index req)
       (handler req))))
 
-(defn wrap-api [handler {:keys [ring-ajax-post ring-ajax-get-or-ws-handshake] :as channel-server}]
+(defn wrap-api
+  "Add API support to a Ring middleware chain. The websockets argument is an initialized Websockets component."
+  [handler {:keys [ring-ajax-post ring-ajax-get-or-ws-handshake] :as websockets}]
   (fn [{:keys [request-method uri] :as req}]
     (let [is-ws? (= "/chsk" uri)]
       (if is-ws?
@@ -129,12 +135,12 @@
           :post (ring-ajax-post req))
         (handler req)))))
 
-(defrecord Middleware [ring-stack channel-server]
+(defrecord Middleware [ring-stack websockets]
   component/Lifecycle
   (start [this]
     (assoc this :ring-stack
                 (-> (not-found-handler)
-                  (wrap-api channel-server)
+                  (wrap-api websockets)
                   (server/wrap-transit-params)
                   (server/wrap-transit-response)
                   (wrap-keyword-params)
@@ -148,7 +154,7 @@
 
 (defn make-middleware []
   (component/using (map->Middleware {})
-    [:channel-server]))
+    [:websockets]))
 
 (defrecord WebServer [config middleware stop-fn]
   component/Lifecycle
@@ -157,7 +163,7 @@
           [port stop-fn] (let [stop-fn (http-kit/run-server (:ring-stack middleware) {:port port})]
                            [(:local-port (meta stop-fn)) (fn [] (stop-fn :timeout 100))])
           uri  (format "http://localhost:%s/" port)]
-      (println "Web server running at `%s`" uri)
+      (println "Web server running at " uri)
       (assoc this :stop-fn stop-fn)))
   (stop [this]
     (when stop-fn
@@ -180,7 +186,7 @@
     (println "Done Running")
     {:status n}))
 
-(defrecord ChannelListener [channel-server]
+(defrecord ChannelListener [websockets]
   WSListener
   (client-dropped [this ws-net cid]
     (println "Client disconnected " cid))
@@ -189,16 +195,16 @@
 
   component/Lifecycle
   (start [component]
-    (add-listener channel-server component)
+    (add-listener websockets component)
     component)
   (stop [component]
-    (remove-listener channel-server component)
+    (remove-listener websockets component)
     component))
 
 (defn make-channel-listener []
   (component/using
     (map->ChannelListener {})
-    [:channel-server]))
+    [:websockets]))
 
 (defn valid-id? [client-id] true)
 
@@ -207,6 +213,6 @@
   (component/system-map
     :config (server/new-config config)
     :middleware (make-middleware)
-    :channel-server (make-channel-server (server/fulcro-parser) {})
+    :websockets (make-websockets (server/fulcro-parser))
     :channel-listener (make-channel-listener)
     :web-server (make-server)))
