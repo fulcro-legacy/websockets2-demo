@@ -5,8 +5,8 @@
     [taoensso.sente.server-adapters.http-kit :as hk]
     [org.httpkit.server :as http-kit]
     ; MUST require these, or you won't get them installed.
-    [wsfix.api.read]
-    [wsfix.api.mutations]
+    wsfix.api.read
+    wsfix.api.mutations
     [fulcro.server :refer [defmutation]]
     [com.stuartsierra.component :as component]
     [fulcro.websockets.transit-packer :as tp]

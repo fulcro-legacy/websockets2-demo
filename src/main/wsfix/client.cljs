@@ -2,6 +2,7 @@
   (:require [fulcro.client :as fc]
             [fulcro.websockets.networking :refer [push-received]]
             [fulcro.websockets :as fw]
+            wsfix.api.mutations
             [wsfix.ui.root :as root]
             [fulcro.client.mutations :refer [defmutation]]
             [fulcro.client.primitives :as prim]))
@@ -51,6 +52,7 @@
   (reset! app (fc/new-fulcro-client
                 ; replace the default remote with websockets
                 :networking {:remote (fw/make-websocket-networking "/chsk"
+                                       :auto-retry? true
                                        :push-handler push-handler
                                        :state-callback state-callback
                                        :global-error-callback (fn [& args]
