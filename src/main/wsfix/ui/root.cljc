@@ -1,28 +1,13 @@
 (ns wsfix.ui.root
   (:require
-    [fulcro.client.mutations :as m]
     [fulcro.client.data-fetch :as df]
-    translations.es                                         ; preload translations by requiring their namespace. See Makefile for extraction/generation
     [fulcro.client.dom :as dom]
-    [wsfix.api.mutations :as api]
-    [fulcro.client.primitives :as prim :refer [defsc]]
-    [fulcro.i18n :refer [tr trf]]))
+    [fulcro.client.primitives :as prim :refer [defsc]]))
 
 (defsc Status [this {:keys [:status] :as props}]
   {:query [:status]
    :ident [:status/by-id :status]}
   (dom/div nil (str "Status " status)))
-
-(m/defmutation op/long-running-thing [_]
-  (action [{:keys [state]}]
-    (swap! state update :a inc))
-  (remote [{:keys [ast state]}]
-    (-> ast
-      (m/returning @state Status)
-      (m/with-target [:status]))))
-
-(m/defmutation op/die! [_]
-  (remote [env] true))
 
 (def ui-status (prim/factory Status))
 

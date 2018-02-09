@@ -21,7 +21,7 @@
 
 (defn- init []
   {:pre [(not (started? @system))]}
-  (when-let [new-system (wsfix.server/build-server {:config "config/dev.edn"})]
+  (when-let [new-system (wsfix.server/build-easy-server "config/dev.edn") #_(wsfix.server/build-server {:config "config/dev.edn"})]
     (reset! system new-system)))
 
 (defn- start []

@@ -1,7 +1,7 @@
 (ns wsfix.client
   (:require [fulcro.client :as fc]
-            [wsfix.networking :as wn]
-            [fulcro.websockets.networking :as ws]
+            [fulcro.websockets.networking :refer [push-received]]
+            [fulcro.websockets :as fw]
             [wsfix.ui.root :as root]
             [fulcro.client.mutations :refer [defmutation]]
             [fulcro.client.primitives :as prim]))
@@ -14,26 +14,43 @@
 (defn start []
   (mount))
 
-(defmutation set-network-status [{:keys [up?]}]
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Hook up logic for dealing with server push and network state changes (e.g. offline?)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defmutation set-network-status
+  "Mutation: Set the network status indicator in app state to up? (true/false)"
+  [{:keys [up?]}]
   (action [{:keys [state]}]
     (swap! state assoc :ui/network-connected? up?)))
 
-(defn state-callback [_ {:keys [open?] :as new-state}]
+(defn state-callback
+  "Function given to websocket network to watch the network connection status. Calls
+  transact to copy that state into the client app state. "
+  [_ {:keys [open?] :as new-state}]
   (when-let [reconciler (some-> app deref :reconciler)]
     (prim/transact! reconciler `[(set-network-status {:up? ~open?})])))
 
-(defn push-handler [msg] (ws/push-received @app msg))
+; hook new support into legacy push received multimethod.
+(defn push-handler
+  "Callback for websocket push messages. For this sample, we just hook it into
+  the legacy support, which is what you might do if you were porting...otherwise,
+  use whatever you want to handle the messages."
+  [msg] (push-received @app msg))
 
-(defmutation time-changed [{:keys [time]}]
+(defmutation time-changed
+  "A top-level mutation meant to update time. Used from push received for the broadcast server time."
+  [{:keys [time]}]
   (action [{:keys [state]}]
     (swap! state assoc :ui/current-time time)))
 
-(defmethod ws/push-received :time-change [{:keys [reconciler]} {:keys [msg]}]
+; The signature of the legacy push received is to receive the app and a topic/msg map.
+(defmethod push-received :time-change [{:keys [reconciler]} {:keys [msg]}]
   (prim/transact! reconciler `[(time-changed ~msg)]))
 
 (defn ^:export init []
   (reset! app (fc/new-fulcro-client
-                :networking {:remote (wn/make-websocket-networking "/chsk"
+                ; replace the default remote with websockets
+                :networking {:remote (fw/make-websocket-networking "/chsk"
                                        :push-handler push-handler
                                        :state-callback state-callback
                                        :global-error-callback (fn [& args]
