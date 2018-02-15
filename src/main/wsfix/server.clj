@@ -40,21 +40,31 @@
       (index req)
       (handler req))))
 
+(defn wrap-verify-sente-params [handler]
+  (fn [{:keys [uri] :as req}]
+    (when (= "/chsk" uri)
+      ;; Verify our :req-params from the client are here.
+      (if (clojure.string/includes? (:query-string req)
+                                    "trustworthy=true")
+        (handler req)
+        {:status 401}))))
+
 (defrecord Middleware [ring-stack websockets]
   component/Lifecycle
   (start [this]
     (assoc this :ring-stack
-                (-> (not-found-handler)
-                  (fw/wrap-api websockets)
-                  (server/wrap-transit-params)
-                  (server/wrap-transit-response)
-                  (wrap-keyword-params)
-                  (wrap-params)
-                  (wrap-resource "public")
-                  (wrap-root)
-                  (wrap-content-type)
-                  (wrap-not-modified)
-                  (wrap-gzip))))
+           (-> (not-found-handler)
+               (fw/wrap-api websockets)
+               (wrap-verify-sente-params)
+               (server/wrap-transit-params)
+               (server/wrap-transit-response)
+               (wrap-keyword-params)
+               (wrap-params)
+               (wrap-resource "public")
+               (wrap-root)
+               (wrap-content-type)
+               (wrap-not-modified)
+               (wrap-gzip))))
   (stop [this]))
 
 (defn make-middleware []
