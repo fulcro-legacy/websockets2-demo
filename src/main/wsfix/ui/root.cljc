@@ -2,6 +2,7 @@
   (:require
     [fulcro.client.data-fetch :as df]
     [fulcro.client.dom :as dom]
+    [wsfix.transit.othertempid :as ot]
     [fulcro.client.primitives :as prim :refer [defsc]]))
 
 (defsc Status [this {:keys [:status] :as props}]
@@ -18,8 +19,11 @@
     (dom/div nil (if network-connected? "Online" "Offline"))
     (dom/p nil (str current-time))
     (dom/button #js {:onClick (fn []
-                                (prim/transact! this `[(op/die!)]))} "Die!!!")
+                                (prim/transact! this `[(op/die! {:othertempid ~(ot/othertempid)})]))}
+      "Die!!!")
     (dom/button #js {:onClick (fn []
-                                (prim/transact! this `[(op/long-running-thing {:n ~a})]))} "Bam!!!")
+                                (prim/transact! this `[(op/long-running-thing {:n ~a
+                                                                               :othertempid ~(ot/othertempid)})]))}
+      "Bam!!!")
     (when status
       (ui-status status))))
