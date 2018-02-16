@@ -7,6 +7,8 @@
     ; MUST require these, or you won't get them installed.
     wsfix.api.read
     wsfix.api.mutations
+    [wsfix.transit.handlers :as custom-handlers]
+    [wsfix.transit.othertempid :as ot]
     [fulcro.server :refer [defmutation]]
     [com.stuartsierra.component :as component]
     [fulcro.websockets.transit-packer :as tp]
@@ -40,21 +42,31 @@
       (index req)
       (handler req))))
 
+(defn wrap-verify-sente-params [handler]
+  (fn [{:keys [uri] :as req}]
+    (when (= "/chsk" uri)
+      ;; Verify our :req-params from the client are here.
+      (if (clojure.string/includes? (:query-string req)
+                                    "trustworthy=true")
+        (handler req)
+        {:status 401}))))
+
 (defrecord Middleware [ring-stack websockets]
   component/Lifecycle
   (start [this]
     (assoc this :ring-stack
-                (-> (not-found-handler)
-                  (fw/wrap-api websockets)
-                  (server/wrap-transit-params)
-                  (server/wrap-transit-response)
-                  (wrap-keyword-params)
-                  (wrap-params)
-                  (wrap-resource "public")
-                  (wrap-root)
-                  (wrap-content-type)
-                  (wrap-not-modified)
-                  (wrap-gzip))))
+           (-> (not-found-handler)
+               (fw/wrap-api websockets)
+               (wrap-verify-sente-params)
+               (server/wrap-transit-params)
+               (server/wrap-transit-response)
+               (wrap-keyword-params)
+               (wrap-params)
+               (wrap-resource "public")
+               (wrap-root)
+               (wrap-content-type)
+               (wrap-not-modified)
+               (wrap-gzip))))
   (stop [this]))
 
 (defn make-middleware []
@@ -109,7 +121,9 @@
                           (Thread/sleep 1000)
                           (let [cids (some-> websockets :connected-uids deref :any)]
                             (doseq [cid cids]
-                              (wp/push websockets cid :time-change {:time (Date.)})))
+                              (wp/push websockets cid :time-change {:time (Date.)})
+                              (wp/push websockets cid :othertempid-ping
+                                       {:othertempid (ot/othertempid)})))
                           (recur)))]
       (.start t)
       (assoc this :thread t)))
@@ -120,12 +134,18 @@
     (map->Broadcaster {})
     [:websockets]))
 
+(def packer
+  (tp/make-packer {:read  custom-handlers/read
+                   :write custom-handlers/write}))
+
 (defn build-server
   [{:keys [config] :or {config "config/dev.edn"}}]
   (component/system-map
     :config (server/new-config config)
     :middleware (make-middleware)
-    :websockets (fw/make-websockets (server/fulcro-parser))
+    :websockets (fw/make-websockets (server/fulcro-parser)
+                                    nil
+                                    {:packer packer})
     :channel-listener (make-channel-listener)
     :broadcaster (make-broadcaster)
     :web-server (make-server)))
@@ -137,7 +157,9 @@
 (defn build-easy-server [path]
   (easy/make-fulcro-server
     :config-path path
-    :components {:websockets       (fw/make-websockets (server/fulcro-parser))
+    :components {:websockets       (fw/make-websockets (server/fulcro-parser)
+                                                       nil
+                                                       {:packer packer})
                  :channel-listener (make-channel-listener)
                  :broadcaster      (make-broadcaster)
                  :adapter          (fw/make-easy-server-adapter)}))

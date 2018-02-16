@@ -3,7 +3,10 @@
             [fulcro.websockets.networking :refer [push-received]]
             [fulcro.websockets :as fw]
             wsfix.api.mutations
+            [wsfix.transit.othertempid :as ot :refer [OtherTempId]]
             [wsfix.ui.root :as root]
+            [fulcro.logging :as log]
+            [wsfix.transit.handlers :as custom-handlers]
             [fulcro.client.mutations :refer [defmutation]]
             [fulcro.client.primitives :as prim]))
 
@@ -48,13 +51,22 @@
 (defmethod push-received :time-change [{:keys [reconciler]} {:keys [msg]}]
   (prim/transact! reconciler `[(time-changed ~msg)]))
 
+; Verify our custom transit-handlers are working correctly.
+(defmethod push-received :othertempid-ping [env {:keys [msg]}]
+  (when-not (= OtherTempId (type (:othertempid msg)))
+    (log/error "othertempid type not encoded correctly" (:othertempid msg))))
+
 (defn ^:export init []
   (reset! app (fc/new-fulcro-client
                 ; replace the default remote with websockets
-                :networking {:remote (fw/make-websocket-networking "/chsk"
-                                       :auto-retry? true
-                                       :push-handler push-handler
-                                       :state-callback state-callback
-                                       :global-error-callback (fn [& args]
-                                                                (apply println "Network error " args)))}))
+               :networking {:remote (fw/make-websocket-networking
+                                     "/chsk"
+                                     :req-params {:trustworthy true}
+                                     :transit-handlers {:read  custom-handlers/read
+                                                        :write custom-handlers/write}
+                                     :auto-retry? true
+                                     :push-handler push-handler
+                                     :state-callback state-callback
+                                     :global-error-callback (fn [& args]
+                                                              (apply println "Network error " args)))}))
   (start))
