@@ -44,7 +44,7 @@
 
 (defn wrap-verify-sente-params [handler]
   (fn [{:keys [uri] :as req}]
-    (when (= "/chsk" uri)
+    (when (= "/socket" uri)
       ;; Verify our :req-params from the client are here.
       (if (clojure.string/includes? (:query-string req)
                                     "trustworthy=true")
@@ -134,18 +134,15 @@
     (map->Broadcaster {})
     [:websockets]))
 
-(def packer
-  (tp/make-packer {:read  custom-handlers/read
-                   :write custom-handlers/write}))
-
 (defn build-server
   [{:keys [config] :or {config "config/dev.edn"}}]
   (component/system-map
     :config (server/new-config config)
     :middleware (make-middleware)
     :websockets (fw/make-websockets (server/fulcro-parser)
-                                    nil
-                                    {:packer packer})
+                                    "/socket"
+                                    {:transit-handlers {:read  custom-handlers/read
+                                                        :write custom-handlers/write}})
     :channel-listener (make-channel-listener)
     :broadcaster (make-broadcaster)
     :web-server (make-server)))
@@ -158,8 +155,9 @@
   (easy/make-fulcro-server
     :config-path path
     :components {:websockets       (fw/make-websockets (server/fulcro-parser)
-                                                       nil
-                                                       {:packer packer})
+                                                       "/socket"
+                                                       {:transit-handlers {:read  custom-handlers/read
+                                                                           :write custom-handlers/write}})
                  :channel-listener (make-channel-listener)
                  :broadcaster      (make-broadcaster)
                  :adapter          (fw/make-easy-server-adapter)}))
