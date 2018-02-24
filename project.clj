@@ -5,7 +5,7 @@
 
   :dependencies [[org.clojure/clojure "1.9.0"]
                  [org.clojure/clojurescript "1.9.946"]
-                 [fulcrologic/fulcro "2.2.0-SNAPSHOT"]
+                 [fulcrologic/fulcro "2.3.0-SNAPSHOT"]
                  [com.taoensso/sente "1.12.0"]
                  [fulcrologic/fulcro-spec "2.0.0-beta3" :scope "test" :exclusions [fulcrologic/fulcro]]]
 

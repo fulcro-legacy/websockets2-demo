@@ -60,7 +60,7 @@
   (reset! app (fc/new-fulcro-client
                 ; replace the default remote with websockets
                :networking {:remote (fw/make-websocket-networking
-                                     "/chsk"
+                                     :websockets-uri "/socket"
                                      :req-params {:trustworthy true}
                                      :transit-handlers {:read  custom-handlers/read
                                                         :write custom-handlers/write}
