@@ -140,8 +140,8 @@
     :config (server/new-config config)
     :middleware (make-middleware)
     :websockets (fw/make-websockets (server/fulcro-parser)
-                                    "/socket"
-                                    {:transit-handlers {:read  custom-handlers/read
+                                    {:websockets-uri   "/socket"
+                                     :transit-handlers {:read  custom-handlers/read
                                                         :write custom-handlers/write}})
     :channel-listener (make-channel-listener)
     :broadcaster (make-broadcaster)
@@ -155,8 +155,8 @@
   (easy/make-fulcro-server
     :config-path path
     :components {:websockets       (fw/make-websockets (server/fulcro-parser)
-                                                       "/socket"
-                                                       {:transit-handlers {:read  custom-handlers/read
+                                                       {:websockets-uri   "/socket"
+                                                        :transit-handlers {:read  custom-handlers/read
                                                                            :write custom-handlers/write}})
                  :channel-listener (make-channel-listener)
                  :broadcaster      (make-broadcaster)
