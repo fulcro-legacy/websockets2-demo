@@ -60,13 +60,13 @@
   (reset! app (fc/new-fulcro-client
                 ; replace the default remote with websockets
                :networking {:remote (fw/make-websocket-networking
-                                     :websockets-uri "/socket"
-                                     :req-params {:trustworthy true}
-                                     :transit-handlers {:read  custom-handlers/read
-                                                        :write custom-handlers/write}
-                                     :auto-retry? true
-                                     :push-handler push-handler
-                                     :state-callback state-callback
-                                     :global-error-callback (fn [& args]
-                                                              (apply println "Network error " args)))}))
+                                     {:websockets-uri        "/socket"
+                                      :req-params            {:trustworthy true}
+                                      :transit-handlers      {:read  custom-handlers/read
+                                                              :write custom-handlers/write}
+                                      :auto-retry?           true
+                                      :push-handler          push-handler
+                                      :state-callback        state-callback
+                                      :global-error-callback (fn [& args]
+                                                               (apply println "Network error " args))})}))
   (start))
