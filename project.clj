@@ -5,9 +5,9 @@
 
   :dependencies [[org.clojure/clojure "1.9.0"]
                  [org.clojure/clojurescript "1.9.946"]
-                 [fulcrologic/fulcro "2.3.0-SNAPSHOT"]
+                 [fulcrologic/fulcro "2.4.1-SNAPSHOT"]
                  [com.taoensso/sente "1.12.0"]
-                 [fulcrologic/fulcro-spec "2.0.0-beta3" :scope "test" :exclusions [fulcrologic/fulcro]]]
+                 [fulcrologic/fulcro-spec "2.0.4" :scope "test" :exclusions [fulcrologic/fulcro]]]
 
   :uberjar-name "wsfix.jar"
 
@@ -26,9 +26,9 @@
              :production {}
              :cljs       {:source-paths ["src/main" "src/test" "src/cards"]
                           :dependencies [[binaryage/devtools "0.9.8"]
-                                         [thheller/shadow-cljs "2.0.150"]
-                                         [org.clojure/core.async "0.3.465"]
-                                         [fulcrologic/fulcro-inspect "2.0.0-alpha5"]
+                                         [thheller/shadow-cljs "2.2.3"]
+                                         [org.clojure/core.async "0.4.474"]
+                                         [fulcrologic/fulcro-inspect "2.0.0" :exclusions [fulcrologic/fulcro-css]]
                                          [devcards "0.2.4" :exclusions [cljsjs/react cljsjs/react-dom]]]}
              :dev        {:source-paths ["src/dev" "src/main" "src/cards"]
                           :jvm-opts     ["-XX:-OmitStackTraceInFastThrow" "-client" "-XX:+TieredCompilation" "-XX:TieredStopAtLevel=1"

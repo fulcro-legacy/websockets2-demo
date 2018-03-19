@@ -22,3 +22,5 @@ i18n/app.js
 i18n/*.mo
 i18n/*~
 i18n/manifest.edn
+.shadow-cljs
+hs_err*
