@@ -19,7 +19,7 @@
   (action [env]
     (tempid-check! othertempid)
     (println "Running for a long time...." n)
-    (Thread/sleep 5000)
+    (Thread/sleep 2000)
     (println "Done Running")
     {:status n}))
 
