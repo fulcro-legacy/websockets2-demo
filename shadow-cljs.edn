@@ -7,4 +7,4 @@
                  :modules    {:app {:entries [wsfix.client]}}
 
                  :devtools   {:after-load wsfix.client/start
-                              :preloads   [fulcro.inspect.preload wsfix.development-preload]}}}}
+                              :preloads   [wsfix.development-preload]}}}}

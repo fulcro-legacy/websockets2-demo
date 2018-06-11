@@ -13,6 +13,7 @@
 (defmutation op/die! [{:keys [othertempid]}]
   (action [env]
     (tempid-check! othertempid)
+    (println ("DIE!!!"))
     (throw (ex-info "Dead!" {:reason "You suck!"}))))
 
 (defmutation op/long-running-thing [{:keys [n othertempid]}]

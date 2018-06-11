@@ -2,13 +2,11 @@
   (:require
     [clojure.tools.namespace.repl :as tools-ns :refer [set-refresh-dirs]]
     [com.stuartsierra.component :as component]
-    [fulcro-spec.suite :as suite]
-    [fulcro-spec.selectors :as sel]
     wsfix.server))
 
 ;; ==================== SERVER ====================
 
-(set-refresh-dirs "src/dev" "src/main" "src/test")
+(set-refresh-dirs "src/dev" "src/main")
 
 (defn started? [sys]
   (-> sys :config :value))
@@ -47,12 +45,4 @@
   []
   (stop)
   (refresh :after 'user/go))
-
-; Run (start-server-tests) in a REPL to start a runner that can render results in a browser
-(suite/def-test-suite start-server-tests
-  {:config       {:port 8888}
-   :test-paths   ["src/test"]
-   :source-paths ["src/main"]}
-  {:available #{:focused :unit :integration}
-   :default   #{::sel/none :focused :unit}})
 

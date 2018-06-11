@@ -8,7 +8,8 @@
             [fulcro.logging :as log]
             [wsfix.transit.handlers :as custom-handlers]
             [fulcro.client.mutations :refer [defmutation]]
-            [fulcro.client.primitives :as prim]))
+            [fulcro.client.primitives :as prim]
+            [fulcro.client.data-fetch :as df]))
 
 (defonce app (atom nil))
 
@@ -58,6 +59,8 @@
 
 (defn ^:export init []
   (reset! app (fc/new-fulcro-client
+                :started-callback (fn [app]
+                                    (df/load app :SOMETHING nil))
                 ; replace the default remote with websockets
                :networking {:remote (fw/make-websocket-networking
                                      {:websockets-uri        "/socket"
